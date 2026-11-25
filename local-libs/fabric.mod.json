@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "cubiomes",
+  "version": "1.0.0",
+  "name": "Cubiomes Local",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.14.0"
+  }
+}

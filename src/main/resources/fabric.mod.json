@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "lolcat",
+	"version": "${version}",
+	"name": "Lolcat",
+	"description": "Client-side biome and structure finder for Xaero's World Map based on world seeds.",
+	"authors": [
+		"Hidden_HAlly"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "MIT",
+	"icon": "assets/lolcat/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"net.hiddenhally.client.LolcatModClient"
+		]
+	},
+	"mixins": [
+		"lolcat.client.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

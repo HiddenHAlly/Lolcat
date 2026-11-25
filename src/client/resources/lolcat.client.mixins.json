@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "net.hiddenhally.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"ScreenAccessor",
+		"XaeroMapScreenMixin",
+		"ChunkbaseOverlayMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"mixins": [
+		"ChunkbaseOverlayMixin"
+	]
+}

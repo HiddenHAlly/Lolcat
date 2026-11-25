@@ -1,0 +1,125 @@
+plugins {
+	// Fabric Loom per Minecraft 26.x (non offuscato). Il vecchio id 'fabric-loom' NON va piu' bene.
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	mavenCentral()
+
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = 'Modrinth'
+				url = 'https://api.modrinth.com/maven'
+			}
+		}
+		filter {
+			includeGroup 'maven.modrinth'
+		}
+	}
+
+	// Add local flat repo for local jar dependencies
+	flatDir {
+		dirs 'local-libs'
+	}
+}
+
+loom {
+	// src/main/java = codice comune, src/client/java = codice solo client (il tuo caso: tutto in client)
+	splitEnvironmentSourceSets()
+
+	mods {
+		"lolcat" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+// XaeroLib e' incluso (JiJ) dentro il jar di Xaero's Minimap. Per COMPILARE serve estrarlo;
+// a runtime Fabric usa la copia gia' annidata.
+// XaeroLib e' incluso (JiJ) dentro il jar di Xaero's Minimap. Per COMPILARE serve estrarlo;
+// a runtime Fabric usa la copia gia' annidata.
+configurations {
+	xaeroLibrary { transitive = false }
+}
+def xaeroNestedJar = layout.buildDirectory.file('compile-libs/xaerolib.jar')
+
+// Use a FileCollection provider to safely evaluate configuration files at configuration-cache compatibility
+def xaeroLibFiles = configurations.xaeroLibrary
+
+def extractXaeroLibrary = tasks.register('extractXaeroLibrary', Copy) {
+	from({
+		zipTree(xaeroLibFiles.singleFile).matching { include 'META-INF/jars/xaerolib-*.jar' }
+	})
+	into(layout.buildDirectory.dir('compile-libs'))
+	rename { 'xaerolib.jar' }
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+	// --- Xaero (solo client) ---
+	xaeroLibrary "maven.modrinth:xaeros-minimap:${project.xaeros_minimap_version}"
+	clientCompileOnly files(xaeroNestedJar).builtBy(extractXaeroLibrary)
+	clientImplementation "maven.modrinth:xaeros-minimap:${project.xaeros_minimap_version}"
+	clientImplementation "maven.modrinth:xaeros-world-map:${project.xaeros_worldmap_version}"
+
+	// --- Cubiomes (bindings Java + libreria nativa) ---
+	// Opzione A (default): jar locale aggiornato, mettilo in libs/cubiomes-local.jar.
+	//   Contiene la libreria nativa SOLO per Linux x86-64 (va bene per sviluppo/test sul tuo PC).
+	//clientImplementation files('libs/cubiomes-local.jar')
+	// Change this from clientImplementation files('libs/cubiomes-local.jar') to:
+	clientImplementation name: 'cubiomes-local'
+
+	// Opzione B: Maven Central (tutte le piattaforme). Imposta cubiomes_version in gradle.properties,
+	//   poi commenta la riga dell'opzione A e togli il commento qui sotto.
+	// clientImplementation "dev.xpple:cubiomes:${project.cubiomes_version}"
+}
+
+processResources {
+	def props = [
+			version              : project.version,
+			minecraft_version    : project.minecraft_version,
+			minecraft_version_dependency: project.minecraft_version_dependency,
+			loader_version       : project.loader_version
+	]
+	inputs.properties props
+	filteringCharset 'UTF-8'
+	filesMatching('fabric.mod.json') {
+		expand props
+	}
+}
+
+def targetJavaVersion = 25
+tasks.withType(JavaCompile).configureEach {
+	it.options.encoding = 'UTF-8'
+	it.options.release = targetJavaVersion
+}
+
+java {
+	def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+	sourceCompatibility = javaVersion
+	targetCompatibility = javaVersion
+	if (JavaVersion.current() < javaVersion) {
+		toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+	}
+	withSourcesJar()
+}
+
+jar {
+	inputs.property 'archivesName', project.base.archivesName
+	from('LICENSE') {
+		rename { "${it}_${project.base.archivesName.get()}" }
+	}
+}
