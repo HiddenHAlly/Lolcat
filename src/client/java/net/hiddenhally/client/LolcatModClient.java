@@ -4,6 +4,9 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.hiddenhally.client.command.LolcatCommand;
 import net.hiddenhally.client.config.SeedStorage;
+import net.hiddenhally.client.containers.ContainerCapture;
+import net.hiddenhally.client.containers.ContainerCommand;
+import net.hiddenhally.client.containers.HighlightRenderer;
 import net.hiddenhally.client.enchant.EnchantCommand;
 import net.hiddenhally.client.enchant.EnchantOverlay;
 import net.hiddenhally.client.finder.LootSearchEngine;
@@ -17,11 +20,14 @@ public class LolcatModClient implements ClientModInitializer {
 		LootSearchEngine.warmUp();
 		SeedStorage.load();
 		EnchantOverlay.register();
+		ContainerCapture.register();
+		HighlightRenderer.registerEvents();
 
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, _) -> {
 			LolcatCommand.register(dispatcher);
 			EnchantCommand.register(dispatcher); // si unisce al nodo "lolcat" già registrato
 			OddsCommand.register(dispatcher);
+			ContainerCommand.register(dispatcher);
 		});
 	}
 }

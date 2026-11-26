@@ -4,6 +4,9 @@ import dev.xpple.cubiomes.Cubiomes;
 import dev.xpple.cubiomes.Generator;
 import dev.xpple.cubiomes.Pos;
 import dev.xpple.cubiomes.StructureConfig;
+import net.hiddenhally.client.containers.ContainerDb;
+import net.hiddenhally.client.containers.ContainerRec;
+import net.hiddenhally.client.containers.ItemRecs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -166,6 +169,75 @@ public final class WorldLootScanner {
         return new Outcome(hits, droppableFrom, null);
     }
 
+    /**
+     * Genera i chunk attorno alle strutture più vicine e SALVA il contenuto previsto di ogni contenitore
+     * (senza cercare un oggetto in particolare). Va fatto in singleplayer con lo stesso seed del server.
+     *
+     * @return contenitori nuovi salvati; -1 = niente singleplayer, -2 = seed diverso
+     */
+    public static int prescan(long seed, Set<String> only, int startX, int startZ, int instances,
+                              Consumer<String> progress) {
+        MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
+        if (server == null) return -1;
+        ServerLevel level = server.overworld();
+        if (level.getSeed() != seed) return -2;
+
+        ContainerDb.ensurePredicted(seed);
+        int before = ContainerDb.INDEX.allPredicted().size();
+        Set<Long> seen = new HashSet<>();
+        long deadline = System.currentTimeMillis() + 20 * 60_000L;
+
+        try (Arena arena = Arena.ofConfined()) {
+            for (WTarget t : TARGETS) {
+                if (!only.contains(t.name)) continue;
+                if (t.type < 0) {
+                    scanRings(server, level, "", t, startX, startZ, seen, new ArrayList<>(), Integer.MAX_VALUE, deadline, progress);
+                    continue;
+                }
+                List<int[]> instancesList = candidatePositions(arena, seed, t, startX, startZ);
+                int n = Math.min(instances, instancesList.size());
+                for (int i = 0; i < n && System.currentTimeMillis() < deadline; i++) {
+                    int[] inst = instancesList.get(i);
+                    progress.accept("Prescan " + t.name + " " + (i + 1) + "/" + n + " (X: " + inst[0] + ", Z: " + inst[1] + ")...");
+                    int cx = inst[0] >> 4;
+                    int cz = inst[1] >> 4;
+                    for (int dz = -t.chunkRadius; dz <= t.chunkRadius; dz++) {
+                        for (int dx = -t.chunkRadius; dx <= t.chunkRadius; dx++) {
+                            scanChunk(server, level, cx + dx, cz + dz, "", t.name, seen);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        ContainerDb.save();
+        return ContainerDb.INDEX.allPredicted().size() - before;
+    }
+
+    /**
+     * Cerca un oggetto nei contenitori PREVISTI già salvati (da un prescan fatto in singleplayer):
+     * è quello che permette di usare /lolcat loot per città antiche, villaggi ecc. anche sui server.
+     */
+    public static Outcome searchCache(long seed, String rawItem, Set<String> only, int startX, int startZ) {
+        String item = LootSearchEngine.normalizeItem(rawItem).replace("minecraft:", "");
+        ContainerDb.ensurePredicted(seed);
+
+        List<LootSearchEngine.ChestHit> hits = new ArrayList<>();
+        Set<String> from = new LinkedHashSet<>();
+        for (ContainerRec r : ContainerDb.INDEX.allPredicted()) {
+            if (!only.isEmpty() && !only.contains(r.structure)) continue;
+            int n = r.count(item, null);
+            if (n <= 0) continue;
+            int[] p = r.positions.get(0);
+            hits.add(new LootSearchEngine.ChestHit(new BlockPos(p[0], p[1], p[2]), r.structure, "cache", n));
+            from.add(r.structure);
+        }
+        if (hits.isEmpty()) return Outcome.error("no_cache");
+        hits.sort(Comparator.comparingDouble(h -> Math.pow(h.pos().getX() - startX, 2) + Math.pow(h.pos().getZ() - startZ, 2)));
+        return new Outcome(hits, from, null);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** Dungeon: nessuna posizione nota, quindi si generano anelli di chunk attorno al giocatore. */
@@ -238,6 +310,14 @@ public final class WorldLootScanner {
                 String table = tableName(randomizable.getLootTable().toString());
                 randomizable.unpackLootTable(null); // stessa routine del gioco quando un giocatore apre il contenitore
                 if (!(be instanceof Container container)) continue;
+
+                // contenuto completo previsto: serve a /lolcat prescan e a /lolcat loot / find sui server
+                ContainerRec predicted = new ContainerRec(level.dimension().toString(), pos.getX(), pos.getY(), pos.getZ());
+                predicted.predicted = true;
+                predicted.structure = structure;
+                predicted.time = System.currentTimeMillis();
+                predicted.items = ItemRecs.fromContainer(container);
+                ContainerDb.INDEX.putPredicted(predicted);
 
                 int found = 0;
                 for (int i = 0; i < container.getContainerSize(); i++) {

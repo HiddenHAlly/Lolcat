@@ -86,6 +86,7 @@ public final class LootSearchRunner {
         status.accept("§eRicerca di " + amount + "x " + shown
                 + (structures.isEmpty() ? "" : " in " + String.join(", ", structures)) + "...");
 
+        boolean[] usedCache = {false};
         long[] lastProgress = {0};
         Consumer<String> progress = msg -> {
             long now = System.currentTimeMillis();
@@ -104,6 +105,14 @@ public final class LootSearchRunner {
                 WorldLootScanner.Outcome world = worldFilter.isEmpty()
                         ? null
                         : WorldLootScanner.search(seed, itemRaw, amount, startX, startZ, worldFilter, progress);
+                // Su un server non c'è un mondo da generare: si usano i dati salvati da un prescan in singleplayer.
+                if (world != null && "no_singleplayer".equals(world.error())) {
+                    WorldLootScanner.Outcome cached = WorldLootScanner.searchCache(seed, itemRaw, worldFilter, startX, startZ);
+                    if (cached.error() == null) {
+                        world = cached;
+                        usedCache[0] = true;
+                    }
+                }
 
                 List<LootSearchEngine.ChestHit> all = new ArrayList<>();
                 Set<String> droppable = new LinkedHashSet<>();
@@ -139,6 +148,7 @@ public final class LootSearchRunner {
                     if (error == null && droppable.isEmpty()) error = "not_droppable";
                     warning = null;
                 }
+                if (usedCache[0] && !chosen.isEmpty() && warning == null) warning = "cache";
                 combined = new LootSearchEngine.Result(chosen, total, total >= amount,
                         new ArrayList<>(droppable), error);
             } catch (Throwable t) {
@@ -161,7 +171,9 @@ public final class LootSearchRunner {
         return switch (code) {
             case "not_droppable" -> "§c'%s' non può uscire dai contenitori delle strutture scelte.";
             case "no_singleplayer" -> "§cLe strutture scelte (village, ancient_city, dungeon...) richiedono un mondo singleplayer "
-                    + "con lo stesso seed: aprine uno e riprova (le coordinate valgono anche sul server).";
+                    + "con lo stesso seed, oppure dati salvati prima con /lolcat prescan <struttura> fatto in singleplayer "
+                    + "(poi funziona anche sui server).";
+            case "cache" -> "§eDati dalla cache del prescan: se qualcuno ha già aperto o saccheggiato i contenitori, il contenuto reale può differire.";
             case "seed_mismatch" -> "§cIl seed del mondo singleplayer non coincide con quello salvato.";
             default -> "§cErrore interno durante la ricerca (vedi log).";
         };
