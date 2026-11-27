@@ -14,36 +14,64 @@
 #   NATIVE_REF  : branch/tag/commit da compilare
 #   JAR_PATH    : percorso del jar dentro Lolcat
 
+# Metti questo file in .github/workflows/build-natives.yml del repo Lolcat
+#
+# COSA FA (lancio manuale: Actions -> build-natives -> Run workflow)
+#   - compila cubiomes_x86.dll    (Windows x86-64, MinGW: MSVC NON va bene)
+#   - compila libcubiomes_arm.so  (Android arm64, NDK)
+#   - le aggiunge nella root di libs/cubiomes-local.jar, accanto a
+#     libcubiomes_x86.so. CubiomesInit le trova da solo via
+#     System.mapLibraryName("cubiomes_x86" / "cubiomes_arm").
+#   - le classi Java non cambiano: nomi di funzioni identici.
+#
+# DA VERIFICARE (non l'ho potuto provare):
+#   - NATIVE_REF: ideale il commit esatto da cui hai compilato la tua .so
+#     (cosi' la DLL ha le stesse funzioni dei bindings nel jar).
+#   - il CMakeLists di xpple/cubiomes deve produrre una libreria condivisa;
+#     i passi "trova e rinomina" cercano il file prodotto, ma se il target
+#     e' solo statico bisogna aggiungere -DBUILD_SHARED_LIBS=ON (gia' messo).
+
 name: build-natives
 
 on:
   workflow_dispatch:
 
 env:
-  NATIVE_REPO: CHANGE_ME/cubiomes-fork      # <-- es. owner/repo
-  NATIVE_REF: master
-  JAR_PATH: local-libs/cubiomes-local.jar
+  NATIVE_REPO: xpple/cubiomes
+  NATIVE_REF: master            # <-- meglio un commit/tag preciso
+  JAR_PATH: libs/cubiomes-local.jar
 
 jobs:
   windows-dll:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
         with:
           repository: ${{ env.NATIVE_REPO }}
           ref: ${{ env.NATIVE_REF }}
+          submodules: recursive
           path: native
-      - name: Installa MinGW-w64
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
       - name: Compila la DLL
         working-directory: native
         run: |
-          # tutti i .c della libreria, esclusi main/test/esempi
-          SRC=$(ls *.c | grep -v -E '(^|/)(main|test|tests|example|examples|finders_test)[^/]*\.c$' || true)
-          echo "Sorgenti: $SRC"
-          x86_64-w64-mingw32-gcc -O3 -shared -o cubiomes_x86.dll $SRC \
-            -I. -static -static-libgcc \
-            -Wl,--export-all-symbols -lm -lpthread
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_SHARED_LINKER_FLAGS="-static -static-libgcc"
+          cmake --build build
+          F=$(find build -maxdepth 2 -name '*.dll' | head -n1)
+          echo "Trovata: $F"
+          cp "$F" cubiomes_x86.dll
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dll
@@ -56,15 +84,20 @@ jobs:
         with:
           repository: ${{ env.NATIVE_REPO }}
           ref: ${{ env.NATIVE_REF }}
+          submodules: recursive
           path: native
       - name: Compila con NDK (bionic, arm64)
         working-directory: native
         run: |
           NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_ROOT}"
-          CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
-          SRC=$(ls *.c | grep -v -E '(^|/)(main|test|tests|example|examples|finders_test)[^/]*\.c$' || true)
-          echo "Sorgenti: $SRC"
-          "$CC" -O3 -shared -fPIC -o libcubiomes_arm.so $SRC -I. -lm
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+          cmake --build build
+          F=$(find build -maxdepth 2 -name '*.so' | head -n1)
+          echo "Trovata: $F"
+          cp "$F" libcubiomes_arm.so
       - uses: actions/upload-artifact@v4
         with:
           name: android-so
@@ -86,5 +119,5 @@ jobs:
           unzip -l "$JAR_PATH" | grep -E 'cubiomes_(x86|arm)'
       - uses: actions/upload-artifact@v4
         with:
-          name: cubiomes-local-multiplatform.jar
+          name: cubiomes-local-multiplatform
           path: ${{ env.JAR_PATH }}
