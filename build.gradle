@@ -76,8 +76,8 @@ dependencies {
 	clientImplementation "maven.modrinth:xaeros-world-map:${project.xaeros_worldmap_version}"
 
 	// --- Cubiomes (bindings Java + libreria nativa) ---
-	// Opzione A (default): jar locale aggiornato, mettilo in libs/cubiomes-local.jar.
-	//   Contiene la libreria nativa SOLO per Linux x86-64 (va bene per sviluppo/test sul tuo PC).
+	// Opzione A: jar locale in local-libs/cubiomes-local.jar con native Linux x86-64,
+	//   Windows x86-64/ARM64 e Android ARM64.
 	//clientImplementation files('libs/cubiomes-local.jar')
 	// Change this from clientImplementation files('libs/cubiomes-local.jar') to:
 	clientImplementation name: 'cubiomes-local'
