@@ -3,6 +3,8 @@ package net.hiddenhally.client.containers;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.hiddenhally.client.sort.ContainerLabelBar;
+import net.hiddenhally.client.sort.SortBot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -39,6 +41,7 @@ public final class ContainerCapture {
     private static List<int[]> activePositions = null;
     private static String activeDim = "";
     private static int lastHash = Integer.MIN_VALUE;
+    private static String pendingLabel = null;
 
     /** Azione da eseguire al prossimo tick (es. aprire una schermata dopo la chat). */
     private static Runnable deferred = null;
@@ -79,6 +82,7 @@ public final class ContainerCapture {
 
         ContainerDb.tick(mc);
         ContainerScanner.tick(mc);
+        SortBot.tick(mc);
         captureOpenContainer(mc);
         HighlightRenderer.tick(mc, false);
     }
@@ -95,6 +99,12 @@ public final class ContainerCapture {
                 lastHash = Integer.MIN_VALUE;
                 activePositions = resolvePositions(mc);
                 activeDim = ContainerDb.currentDim();
+                pendingLabel = null;
+                if (activePositions != null && !activePositions.isEmpty()) {
+                    int[] p0 = activePositions.get(0);
+                    ContainerRec known = ContainerDb.INDEX.findObserved(activeDim, p0[0], p0[1], p0[2]);
+                    ContainerLabelBar.applyLabel(known == null ? "" : known.label);
+                }
             }
             if (activePositions != null && !activePositions.isEmpty()) snapshot(mc, menu);
         } else {
@@ -105,6 +115,7 @@ public final class ContainerCapture {
 
     private static List<int[]> resolvePositions(Minecraft mc) {
         BlockPos pos = ContainerScanner.currentTarget();
+        if (pos == null) pos = SortBot.currentTarget();
         if (pos == null && lastUsePos != null && tickCounter - lastUseTick < 100) pos = lastUsePos;
         if (pos == null) return null;
         List<int[]> out = new ArrayList<>();
@@ -144,8 +155,31 @@ public final class ContainerCapture {
         rec.time = System.currentTimeMillis();
         rec.predicted = false;
         ContainerRec prev = ContainerDb.INDEX.findObserved(activeDim, p[0], p[1], p[2]);
-        if (prev != null) rec.structure = prev.structure;
+        if (prev != null) {
+            rec.structure = prev.structure;
+            rec.label = prev.label;
+        }
+        if (pendingLabel != null) rec.label = pendingLabel;
         ContainerDb.INDEX.putObserved(rec);
+    }
+
+    /** Chiamato dalla barra etichetta: salva subito il nome scelto per il contenitore aperto. */
+    public static void setLabel(String text) {
+        pendingLabel = text.trim();
+        if (activePositions != null && !activePositions.isEmpty()) {
+            int[] p = activePositions.get(0);
+            ContainerRec prev = ContainerDb.INDEX.findObserved(activeDim, p[0], p[1], p[2]);
+            if (prev != null) {
+                prev.label = pendingLabel;
+                ContainerDb.INDEX.touch();
+            }
+        }
+    }
+
+    /** L'altra metà di un baule doppio (o null). */
+    public static BlockPos neighborPos(ClientLevel level, BlockPos pos) {
+        int[] n = doubleChestNeighbor(level, pos);
+        return n == null ? null : new BlockPos(n[0], n[1], n[2]);
     }
 
     public static boolean isContainerOpen(Minecraft mc) {

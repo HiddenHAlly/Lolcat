@@ -136,6 +136,7 @@ public final class ContainerDb {
         o.addProperty("t", r.time);
         o.addProperty("pred", r.predicted);
         o.addProperty("struct", r.structure);
+        o.addProperty("label", r.label);
         JsonArray pos = new JsonArray();
         for (int[] p : r.positions) for (int v : p) pos.add(v);
         o.add("pos", pos);
@@ -161,6 +162,7 @@ public final class ContainerDb {
         r.time = o.get("t").getAsLong();
         r.predicted = o.get("pred").getAsBoolean();
         r.structure = o.has("struct") ? o.get("struct").getAsString() : "";
+        r.label = o.has("label") ? o.get("label").getAsString() : "";
         JsonArray pos = o.getAsJsonArray("pos");
         for (int i = 0; i + 2 < pos.size(); i += 3) {
             r.positions.add(new int[]{pos.get(i).getAsInt(), pos.get(i + 1).getAsInt(), pos.get(i + 2).getAsInt()});

@@ -65,7 +65,7 @@ public final class ContainerScanner {
         LocalPlayer p = mc.player;
         if (p == null || mc.level == null) return "Entra prima in un mondo.";
         if (isBusy()) return "Scansione già in corso.";
-        if (mc.gui.screen() != null) return "Chiudi prima la schermata aperta.";
+        //if (mc.gui.screen() != null) return "Chiudi prima la schermata aperta.";
         if (!p.getMainHandItem().isEmpty()) return "Svuota la mano principale (serve per non piazzare blocchi per sbaglio).";
         if (!force && inDeepDark(mc)) {
             return "Sei nel Deep Dark: aprire contenitori può attivare i sensori sculk e il Warden. Usa /lolcat scan force se vuoi.";
@@ -108,7 +108,7 @@ public final class ContainerScanner {
         return count;
     }
 
-    private static boolean isScannable(BlockEntity be) {
+    public static boolean isScannable(BlockEntity be) {
         if (be instanceof TrappedChestBlockEntity) return false;
         return be instanceof ChestBlockEntity || be instanceof BarrelBlockEntity || be instanceof ShulkerBoxBlockEntity;
     }

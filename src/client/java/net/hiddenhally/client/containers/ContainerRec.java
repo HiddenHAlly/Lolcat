@@ -11,6 +11,8 @@ public final class ContainerRec {
     /** true = contenuto PREVISTO dal seed (prescan); false = visto davvero dal giocatore. */
     public boolean predicted;
     public String structure = "";
+    /** Etichetta scelta dal giocatore (nome del preset di ordinamento che questo contenitore deve contenere). */
+    public String label = "";
     public List<ItemRec> items = new ArrayList<>();
 
     public ContainerRec() {

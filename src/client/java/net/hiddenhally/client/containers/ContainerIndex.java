@@ -15,6 +15,11 @@ public final class ContainerIndex {
         return version;
     }
 
+    /** Segna che qualcosa è cambiato (per salvataggio e aggiornamento delle schermate). */
+    public synchronized void touch() {
+        version++;
+    }
+
     public synchronized void clearObserved() {
         observed.clear();
         version++;

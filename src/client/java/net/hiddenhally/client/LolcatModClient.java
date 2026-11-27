@@ -7,6 +7,9 @@ import net.hiddenhally.client.config.SeedStorage;
 import net.hiddenhally.client.containers.ContainerCapture;
 import net.hiddenhally.client.containers.ContainerCommand;
 import net.hiddenhally.client.containers.HighlightRenderer;
+import net.hiddenhally.client.sort.ContainerLabelBar;
+import net.hiddenhally.client.sort.SortCommand;
+import net.hiddenhally.client.sort.SortKeys;
 import net.hiddenhally.client.enchant.EnchantCommand;
 import net.hiddenhally.client.enchant.EnchantOverlay;
 import net.hiddenhally.client.finder.LootSearchEngine;
@@ -22,12 +25,15 @@ public class LolcatModClient implements ClientModInitializer {
 		EnchantOverlay.register();
 		ContainerCapture.register();
 		HighlightRenderer.registerEvents();
+		SortKeys.register();
+		ContainerLabelBar.register();
 
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, _) -> {
 			LolcatCommand.register(dispatcher);
 			EnchantCommand.register(dispatcher); // si unisce al nodo "lolcat" già registrato
 			OddsCommand.register(dispatcher);
 			ContainerCommand.register(dispatcher);
+			SortCommand.register(dispatcher);
 		});
 	}
 }

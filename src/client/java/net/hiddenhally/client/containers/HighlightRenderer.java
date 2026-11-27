@@ -25,6 +25,9 @@ public final class HighlightRenderer {
     private static final RenderStateDataKey<List<Line>> LINES_KEY = RenderStateDataKey.create(() -> "Lolcat highlights");
     private static volatile List<Line> lines = List.of();
     private static long lastVersion = -1;
+    private static volatile int[] areaMin = null;
+    private static volatile int[] areaMax = null;
+    private static volatile net.minecraft.core.BlockPos targetPos = null;
     private static int timer = 0;
     private static final Set<FindState.Request> warnedMissing = new HashSet<>();
 
@@ -83,7 +86,43 @@ public final class HighlightRenderer {
             built.add(new Line(new Vec3(x0, y0, z1), new Vec3(x0, y1, z1), c));
             built.add(new Line(new Vec3(x1, y0, z1), new Vec3(x1, y1, z1), c));
         }
+        int[] amin = areaMin, amax = areaMax;
+        if (amin != null && amax != null) {
+            addBox(built, amin[0] - e, amin[1] - e, amin[2] - e, amax[0] + 1 + e, amax[1] + 1 + e, amax[2] + 1 + e, 0xFF00FFAA);
+        }
+        net.minecraft.core.BlockPos tp = targetPos;
+        if (tp != null) {
+            addBox(built, tp.getX() - e, tp.getY() - e, tp.getZ() - e, tp.getX() + 1 + e, tp.getY() + 1 + e, tp.getZ() + 1 + e, 0xFFFFFFFF);
+        }
         lines = built;
+    }
+
+    /** Riquadro dell'area di ordinamento (null per toglierlo). */
+    public static void setArea(int[] min, int[] max) {
+        areaMin = min;
+        areaMax = max;
+        lastVersion = -1;
+    }
+
+    /** Contenitore da raggiungere (riquadro bianco, modalità assistita del bot). */
+    public static void setTarget(net.minecraft.core.BlockPos pos) {
+        targetPos = pos;
+        lastVersion = -1;
+    }
+
+    private static void addBox(List<Line> out, double x0, double y0, double z0, double x1, double y1, double z1, int c) {
+        out.add(new Line(new Vec3(x0, y0, z0), new Vec3(x1, y0, z0), c));
+        out.add(new Line(new Vec3(x0, y0, z0), new Vec3(x0, y0, z1), c));
+        out.add(new Line(new Vec3(x1, y0, z1), new Vec3(x1, y0, z0), c));
+        out.add(new Line(new Vec3(x1, y0, z1), new Vec3(x0, y0, z1), c));
+        out.add(new Line(new Vec3(x0, y1, z0), new Vec3(x1, y1, z0), c));
+        out.add(new Line(new Vec3(x0, y1, z0), new Vec3(x0, y1, z1), c));
+        out.add(new Line(new Vec3(x1, y1, z1), new Vec3(x1, y1, z0), c));
+        out.add(new Line(new Vec3(x1, y1, z1), new Vec3(x0, y1, z1), c));
+        out.add(new Line(new Vec3(x0, y0, z0), new Vec3(x0, y1, z0), c));
+        out.add(new Line(new Vec3(x1, y0, z0), new Vec3(x1, y1, z0), c));
+        out.add(new Line(new Vec3(x0, y0, z1), new Vec3(x0, y1, z1), c));
+        out.add(new Line(new Vec3(x1, y0, z1), new Vec3(x1, y1, z1), c));
     }
 
     public static void clearAll(Minecraft mc) {
