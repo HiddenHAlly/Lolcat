@@ -1,0 +1,90 @@
+# Metti questo file in .github/workflows/build-natives.yml
+#
+# COSA FA
+#   - compila cubiomes_x86.dll  (Windows x86-64, MinGW)
+#   - compila libcubiomes_arm.so (Android arm64, NDK)
+#   - le inserisce nella root di local-libs/cubiomes-local.jar
+#     (stesso posto di libcubiomes_x86.so: il loader Java le trova da solo)
+#   - le classi Java NON vengono toccate: nomi di funzioni invariati
+#
+# DA CONFIGURARE (sezione env)
+#   NATIVE_REPO : repo con i sorgenti C usati per costruire la .so originale
+#                 (cubiomes + loot_library.h, di solito il fork usato da
+#                 dev.xpple.cubiomes). Se hai un tuo fork, mettilo qui.
+#   NATIVE_REF  : branch/tag/commit da compilare
+#   JAR_PATH    : percorso del jar dentro Lolcat
+
+name: build-natives
+
+on:
+  workflow_dispatch:
+
+env:
+  NATIVE_REPO: CHANGE_ME/cubiomes-fork      # <-- es. owner/repo
+  NATIVE_REF: master
+  JAR_PATH: local-libs/cubiomes-local.jar
+
+jobs:
+  windows-dll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NATIVE_REPO }}
+          ref: ${{ env.NATIVE_REF }}
+          path: native
+      - name: Installa MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - name: Compila la DLL
+        working-directory: native
+        run: |
+          # tutti i .c della libreria, esclusi main/test/esempi
+          SRC=$(ls *.c | grep -v -E '(^|/)(main|test|tests|example|examples|finders_test)[^/]*\.c$' || true)
+          echo "Sorgenti: $SRC"
+          x86_64-w64-mingw32-gcc -O3 -shared -o cubiomes_x86.dll $SRC \
+            -I. -static -static-libgcc \
+            -Wl,--export-all-symbols -lm -lpthread
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-dll
+          path: native/cubiomes_x86.dll
+
+  android-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NATIVE_REPO }}
+          ref: ${{ env.NATIVE_REF }}
+          path: native
+      - name: Compila con NDK (bionic, arm64)
+        working-directory: native
+        run: |
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_ROOT}"
+          CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          SRC=$(ls *.c | grep -v -E '(^|/)(main|test|tests|example|examples|finders_test)[^/]*\.c$' || true)
+          echo "Sorgenti: $SRC"
+          "$CC" -O3 -shared -fPIC -o libcubiomes_arm.so $SRC -I. -lm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-so
+          path: native/libcubiomes_arm.so
+
+  repack-jar:
+    needs: [windows-dll, android-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: natives
+      - name: Aggiungi le librerie al jar
+        run: |
+          cp natives/windows-dll/cubiomes_x86.dll .
+          cp natives/android-so/libcubiomes_arm.so .
+          zip -u "$JAR_PATH" cubiomes_x86.dll libcubiomes_arm.so
+          unzip -l "$JAR_PATH" | grep -E 'cubiomes_(x86|arm)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cubiomes-local-multiplatform.jar
+          path: ${{ env.JAR_PATH }}
